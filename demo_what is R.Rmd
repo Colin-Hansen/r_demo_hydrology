@@ -125,7 +125,7 @@ library(rmarkdown)
   # OR seq_along the site names (e.g. S01)
   
    # create shorter list of site names for TESTING
-  site_names<-site_names[1:10]
+  site_names<-site_names[1:2]
   
   
   for (i in seq_along(site_names)) {
@@ -134,7 +134,7 @@ library(rmarkdown)
       # get the names of the raw data subfolders
       subfolder_names<-dir('data_in',full.names = TRUE)
       
-      # subfolder_names<-subfolder_names[c(1:3)] # TESTING ONLY
+      subfolder_names<-subfolder_names[c(1:3)] # TESTING ONLY
       
       # enter loop to create a list of the subfolder names (e.g. 1995, 1996, etc.)
       
@@ -234,36 +234,20 @@ library(rmarkdown)
       
       
        # create a directory to save the .CSV files
-      CSV_master_folder_5_min<-paste0('data_out',"/MASTER_CSV_5_min")
+      # demo_1_folder<-paste0('data_out',"/MASTER_CSV_5_min")
+      demo_1_folder<-'data_out/demo_1'
      
       # create (if necessary) 'data_out/MASTER_CSV_5_min' directory
-      if(dir.exists(CSV_master_folder_5_min) == FALSE) dir.create(CSV_master_folder_5_min)
+      if(dir.exists(demo_1_folder) == FALSE) dir.create(demo_1_folder)
       
       # create a file name to save the files for each site
       CSV_file_name<-paste0(site_names[i],"_5_min.csv")
-      CSV_outfile<-file.path(CSV_master_folder_5_min, CSV_file_name)
+      CSV_outfile<-file.path(demo_1_folder, CSV_file_name)
         
       # write the results to .CSV file
       write_csv(rainfall_data_df,CSV_outfile)   
+     
       
-      # rm(rainfall_data_df)  
-      
-      
-      
-      # save the compiled 5-minute rainfall data for each site in a list
-      
-      # create empty list
-      
-      if(i==1) { rainfall_data_list <- list(NULL)
-      
-      } else {
-         
-        # save to the list
-                
-        rainfall_data_list[i] <- list(rainfall_data_df)
-      
-      }
-
   } # end of seq_along site names
   
 
@@ -282,7 +266,7 @@ library(rmarkdown)
   # read multiple .CSV files into a list; apply the 5-minute stats function; compile summary statistics; create table
 
   # the names of the CSV files saved in the previous chunk
-  csv_name<-list.files('data_out/MASTER_CSV_5_min')
+  csv_name<-list.files('data_out/demo_1')
 
   # create empty list to hold rainfall data
 
@@ -293,32 +277,22 @@ library(rmarkdown)
   for (m in seq_along(csv_name)) {
     
       # specify the CSV directory location and path to read the CSV file
-      CSV_folder<-'data_out/MASTER_CSV_5_min'
-      CSV_infile<-file.path(CSV_folder, csv_name[m])
+      CSV_infile<-file.path(demo_1_folder, csv_name[m])
         
       # create site name prefix
       site_prefix<-strtrim(csv_name[m],3)
       # print(site_prefix)
       
-      # create directory to save statistics results - 5 minute data
-      stats_folder_1<-'data_out/_1'
+      # create directory to save statistics results - 5 minute data ** NOT USED HERE **
+      # stats_folder_1<-'data_out/demo_1/_1'
       
       # create (if necessary) directory
-      if(dir.exists(stats_folder_1) == FALSE) dir.create(stats_folder_1)
+      # if(dir.exists(stats_folder_1) == FALSE) dir.create(stats_folder_1)
+      # 
       
-      # create directory to save statistics results
-      stats_folder_2<-'data_out/_2'
-      
-      # create (if necessary) directory
-      if(dir.exists(stats_folder_2) == FALSE) dir.create(stats_folder_2)
-     
-      
-      # delete any previous .CSV files in 'stats_folder_1/2'
-      files_to_remove<-dir('data_out/_1',full.names = TRUE)
-      file.remove(files_to_remove)
-      
-      files_to_remove<-dir('data_out/_2',full.names = TRUE)
-      file.remove(files_to_remove)
+      # delete any previous .CSV files in 'data_out/demo_1/_1' ** NOT USED HERE **
+      # files_to_remove<-dir('data_out/demo_1/_1',full.names = TRUE)
+      # file.remove(files_to_remove)
       
       
       # read the rainfall data for one site using 'read_csv'
