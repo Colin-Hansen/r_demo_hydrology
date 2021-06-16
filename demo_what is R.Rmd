@@ -1,0 +1,410 @@
+---
+title: ""
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# note to self; load 'plyr' before 'dplyr' / 'tidyverse'; see page 151 ' R for Everyone'
+
+library(plyr)
+library(tidyverse)
+# note: tidyverse includes 'dplyr' package but not 'plyr'
+
+library(printr)
+library(reshape2)
+library(pander)
+
+library(lubridate)
+library(scales)
+library(rio)
+library(knitr)
+library(tinytex)
+library(ggnewscale)
+library(hydroTSM)
+library(cowplot)
+library(flextable)
+library(officer) #see page 30 'flextable' package
+library(weathercan)
+library(lutz) # required to download wx stations in weathercan
+library(sf) # required to download wx stations in weathercan
+library(naniar)
+library(rmarkdown)
+
+
+```
+
+
+##  R the Language
+
+- created in the early 1990's by Ross Ihaka and Robert Gentleman (working at the University of Auckland)
+- It is based on the S language that was developed at Bell Labs in the 1970's
+
+
+##  R the Software
+
+- free software environment for statistical computing and graphics
+- R is developed and maintained by the R Core Team
+- provides a wide variety of statistical (linear and nonlinear modelling, classical statistical tests, time-series analysis, classification, clustering, …) methods and graphical techniques
+- R can be extended via packages that are available through the CRAN family of Internet sites
+
+
+##  RStudio
+
+- RStudio is an integrated development environment (IDE) for R
+- the most common user interface for R
+- includes tools for plotting, history, debugging and workspace management
+- available in open source, server, and pro versions 
+
+
+##  Moore And Hutchinson - part 1 (2017)
+
+![R packages of particular interest to hydrologists](images/Table 1 part 1 Moore.png)
+
+##  Moore And Hutchinson - part 2 (2017)
+
+![R packages of particular interest to hydrologists](images/Table 1 part 2 Moore.png)
+
+##  R in Hydrology (Slater et al, 2019)
+
+![A typical hydrological workflow in R](images/Figure 3.png)
+
+
+##  Example: Files in Multiple Directories
+
+- A client has operated a network of 45 rain gauges for 25 years
+- They ask for a total raw data count for each site
+
+![Raw data folder structure](images/raw data folder structure.png)
+##  Example: Files in Multiple Directories
+
+- the data is saved as .OUT files, one file per site per year
+
+![Raw data folder structure](images/raw data list of files 1995.png)
+
+
+
+:::::: {.columns}
+
+::: {.column}
+###  Example: Files in Multiple Directories
+- A client has operated a network of 45 rain gauges for 25 years
+- The client asks for a total raw data count for each site
+
+:::
+
+::: {.column}
+![Raw data folder structure](images/raw data folder structure.png)
+
+:::
+::::::
+
+
+##
+
+![the raw data is saved as .OUT files, one file per site per yearRaw data folder structure](images/raw data list of files 1995.png)
+```{r compile-raw-data, eval = TRUE, include=FALSE,cache=FALSE}
+
+  # remove all the files saved from the previous session
+  #rm(list=ls())
+
+  # read the site names
+  site_names_station_names<-read.table('Site Names/Site_Names_and_Ground_Elevations.csv',sep=",",header=TRUE,stringsAsFactors = FALSE)
+ 
+  # extract a vector of the site names
+  site_names<-as.character(site_names_station_names$Site.Name)
+  
+   # extract a vector of the STATION names
+  station_names<-as.character(site_names_station_names$Station)
+  
+  
+  # Specify the site for compiling the .csv data
+  single_site_name <- site_names[1]
+  
+  # OR seq_along the site names (e.g. S01)
+  
+   # create shorter list of site names for TESTING
+  site_names<-site_names[1:10]
+  
+  
+  for (i in seq_along(site_names)) {
+  
+  
+      # get the names of the raw data subfolders
+      subfolder_names<-dir('data_in',full.names = TRUE)
+      
+      # subfolder_names<-subfolder_names[c(1:3)] # TESTING ONLY
+      
+      # enter loop to create a list of the subfolder names (e.g. 1995, 1996, etc.)
+      
+      # create empty list
+      
+      subfolder_names_list <- list(NULL)
+      
+      for (q in seq_along(subfolder_names)) {  
+      
+      # build the list of subfolder names
+        
+      subfolder_names_list[q] <- list(subfolder_names[q])
+      
+        } # end of 'seq_along(subfolder_names)' 
+        
+      
+      # use 'lapply' to create a list of file paths / filenames across all folders
+      
+      vector_all_filenames <- lapply(subfolder_names_list,list.files,full.names = TRUE)
+      
+      # unlist the list of filenames
+      
+      vector_all_filenames_unlist <- unlist(vector_all_filenames)
+      
+      # use 'str_detect' to identify all the files that match 'site_name' (e.g. S01)
+      
+      site_name_detect <- str_detect(vector_all_filenames_unlist,site_names[i])
+     
+      # subset the files that match 'site_name'
+      
+      subset_filenames <- vector_all_filenames_unlist[site_name_detect]
+     
+         # enter loop to create a list of the subset filenames
+      
+          # create empty list
+      
+          subset_filenames_list <- list(NULL)
+      
+          for (b in seq_along(subset_filenames)) {  
+          
+            # build the list of subset filenames
+              
+            subset_filenames_list[b] <- list(subset_filenames[b])
+      
+        } # end of 'seq_along(subset_filenames)' 
+      
+      
+    
+      ### function ###
+      
+      process_raw_file_function <- function(x){
+      
+          # read raw rainfall data using 'read_tsv'
+          rainfall_data<-read_tsv(x,col_names = FALSE,trim_ws = TRUE,skip = 3)
+          
+          colnames(rainfall_data)<-c("Date","Hour.Minute.Seconds","Rainfall")
+          
+          # create a column of Site.Name data
+          
+          # 25-FEB-2021; was getting an error on 'name' 
+          # Site.Name<-rep(name,nrow(rainfall_data))
+          
+          # corrected as follows
+           Site.Name<-rep(site_names[i],nrow(rainfall_data))
+         
+          # get the discrete date - time components
+          Year<-year(rainfall_data$Date)
+          Month<-month(rainfall_data$Date)
+          Week<-week(rainfall_data$Date)
+          Day<-mday(rainfall_data$Date)
+          Hour<-hour(rainfall_data$Hour.Minute.Seconds)
+          Minute<-minute(rainfall_data$Hour.Minute.Seconds)  
+          DOY<-yday(rainfall_data$Date)
+          # turned the following row off
+          # Cumulative.Yearly.Rainfall<-cumsum(rainfall_data$Rainfall)
+          
+          # column bind the data and the date info
+          temp_df<-cbind(Site.Name,rainfall_data,Year,Month,Week,Day,Hour,Minute,DOY)
+         
+          # use mutate to add Date-Time from components
+          temp_df <- temp_df %>% mutate(Date.Time=make_datetime(Year,Month,Day,Hour,Minute))
+          
+          
+      }  # end 'process_raw_file_function'
+      
+      
+      
+      # use 'map' to apply 'process_raw_file_function' to the list of dataframes
+          
+      rainfall_data_list <- subset_filenames_list %>% map(process_raw_file_function)
+          
+      # use 'bind_rows' to combine the list of dataframes to one dataframe
+          
+      rainfall_data_df <- bind_rows(rainfall_data_list)      
+         
+      # view(head(rainfall_data_df))
+      
+      
+       # create a directory to save the .CSV files
+      CSV_master_folder_5_min<-paste0('data_out',"/MASTER_CSV_5_min")
+     
+      # create (if necessary) 'data_out/MASTER_CSV_5_min' directory
+      if(dir.exists(CSV_master_folder_5_min) == FALSE) dir.create(CSV_master_folder_5_min)
+      
+      # create a file name to save the files for each site
+      CSV_file_name<-paste0(site_names[i],"_5_min.csv")
+      CSV_outfile<-file.path(CSV_master_folder_5_min, CSV_file_name)
+        
+      # write the results to .CSV file
+      write_csv(rainfall_data_df,CSV_outfile)   
+      
+      # rm(rainfall_data_df)  
+      
+      
+      
+      # save the compiled 5-minute rainfall data for each site in a list
+      
+      # create empty list
+      
+      if(i==1) { rainfall_data_list <- list(NULL)
+      
+      } else {
+         
+        # save to the list
+                
+        rainfall_data_list[i] <- list(rainfall_data_df)
+      
+      }
+
+  } # end of seq_along site names
+  
+
+```
+
+##  Compile Statistics for Multiple Sites
+
+- read the rainfall data into a list
+- each component of the list has the data for one site
+- apply the custom statistics function to each element of the list
+- bind the results together into a single summary table
+
+## City of Calgary Rainfall Data - Summary by Site
+```{r stats-summary-table-1, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+  # read multiple .CSV files into a list; apply the 5-minute stats function; compile summary statistics; create table
+
+  # the names of the CSV files saved in the previous chunk
+  csv_name<-list.files('data_out/MASTER_CSV_5_min')
+
+  # create empty list to hold rainfall data
+
+  rainfall_data_list <- list(NULL)
+
+  # enter a loop to read the .CSV files
+
+  for (m in seq_along(csv_name)) {
+    
+      # specify the CSV directory location and path to read the CSV file
+      CSV_folder<-'data_out/MASTER_CSV_5_min'
+      CSV_infile<-file.path(CSV_folder, csv_name[m])
+        
+      # create site name prefix
+      site_prefix<-strtrim(csv_name[m],3)
+      # print(site_prefix)
+      
+      # create directory to save statistics results - 5 minute data
+      stats_folder_1<-'data_out/_1'
+      
+      # create (if necessary) directory
+      if(dir.exists(stats_folder_1) == FALSE) dir.create(stats_folder_1)
+      
+      # create directory to save statistics results
+      stats_folder_2<-'data_out/_2'
+      
+      # create (if necessary) directory
+      if(dir.exists(stats_folder_2) == FALSE) dir.create(stats_folder_2)
+     
+      
+      # delete any previous .CSV files in 'stats_folder_1/2'
+      files_to_remove<-dir('data_out/_1',full.names = TRUE)
+      file.remove(files_to_remove)
+      
+      files_to_remove<-dir('data_out/_2',full.names = TRUE)
+      file.remove(files_to_remove)
+      
+      
+      # read the rainfall data for one site using 'read_csv'
+      rain_5_min<-read_csv(CSV_infile,col_names = TRUE)
+      
+      # save rainfall data to the list
+                
+      rainfall_data_list[m] <- list(rain_5_min)
+      
+      # view(head(rain_5_min))
+    
+  } # end of seq_along csv_name
+    
+  
+     # function to calculate the summary stats
+      
+      rain_stats<-function(x) {
+    
+        site.name <- x$Site.Name[1]
+        
+        mean <- mean(x$Rainfall,na.rm = TRUE)
+        
+        sd <- sd(x$Rainfall,na.rm = TRUE)
+        
+        max <- max(x$Rainfall,na.rm = TRUE)
+        
+        n.total <- nrow(x)
+        
+        n.NA <- sum(is.na(x$Rainfall))
+        
+        pct.missing <- (n.NA/n.total)*100
+        
+        n.non.zero <- nrow(subset(x,Rainfall > 0))
+        
+        pct.non.zero <- (n.non.zero/n.total)*100
+        
+        n.May.to.Sept <- x %>% filter(Month >= 5 & Month <= 9)
+        
+        n.May.to.Sept <- nrow(n.May.to.Sept)
+        
+        pct.May.to.Sept <- (n.May.to.Sept/n.total)*100
+        
+        # create dataframe of the results
+        
+        stats_5_min_df <- data.frame("Site.Name"=site.name,
+                                      "mean"=mean,
+                                      "std.dev"=sd,
+                                      "max"=max,
+                                      "n.total"=n.total,
+                                      "n.NA"=n.NA,
+                                      "pct.missing"=pct.missing,
+                                      "pct.non.zero"=pct.non.zero,
+                                      "pct.May.to.Sept"=pct.May.to.Sept)  
+        
+    
+      } # end of rain_stats function
+    
+      
+    # use 'map' to apply 'rain_stats' function to the list of dataframes
+        
+    rain_stats_list <- rainfall_data_list %>% map(rain_stats)
+        
+    # use 'bind_rows' to combine the list of dataframes to one dataframe
+        
+    rainfall_stats_df <- bind_rows(rain_stats_list)      
+       
+    
+    # use flextable to format the summary table
+    
+    # set up a standard border to 'flextable'; requires 'officer' package
+    std_border <- fp_border(color="black",width=1.5)
+    
+    rainfall_stats_df %>%  flextable() %>%
+    align(align="center",part = "all") %>%
+    font(fontname = "Calibri (Body)", part = "all") %>%
+    fontsize(size = 11, part = "all") %>%
+    colformat_double(j=c(2,3),digits = 4) %>%
+    colformat_double(j=c(8,9),digits = 2) %>% 
+    bold(bold=TRUE,part = "header") %>%
+    border_inner(border=std_border,part = "all") %>%
+    # fit_to_width(max_width = 11) %>%
+    bg(bg="#EFEFEF") %>% 
+    autofit()
+    
+    
+``` 
+
+
+
