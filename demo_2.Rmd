@@ -1,0 +1,221 @@
+---
+title: ""
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# note to self; load 'plyr' before 'dplyr' / 'tidyverse'; see page 151 ' R for Everyone'
+
+library(plyr)
+library(tidyverse)
+# note: tidyverse includes 'dplyr' package but not 'plyr'
+
+library(printr)
+library(reshape2)
+library(pander)
+
+library(lubridate)
+library(scales)
+library(rio)
+library(knitr)
+library(tinytex)
+library(ggnewscale)
+library(hydroTSM)
+library(cowplot)
+library(flextable)
+library(officer) #see page 30 'flextable' package
+library(weathercan)
+library(lutz) # required to download wx stations in weathercan
+library(sf) # required to download wx stations in weathercan
+library(naniar)
+library(rmarkdown)
+
+
+```
+
+
+##  the weathercan package
+
+- Designed to access historical climate data from Environment and Climate Change Canada
+- Data can be downloaded from multiple stations and automatically processed into a single dataset
+- Download intervals are hour, day, or month
+- Tools are also provided to identify stations either by name or proximity to a location.
+
+
+```{r get-met-data, eval = TRUE, include=FALSE, cache=TRUE}
+
+    # optional: download a list of stations (do every month or so)
+  
+    # stations <- stations_dl()
+  
+    # download weather data flags
+  
+    data_flags <- flags
+  
+  
+    # use the weathercan package to extract climate data
+    
+    # the package includes a dataframe 'stations' with over 26,000 weather stations 
+    
+    # use the 'grepl' function to filter for stations with 'EDMONTON' in the name; and interval = 'day'
+    
+    edm_daily_stations <- stations() %>% filter(grepl("EDMONTON",station_name) & interval=='day')
+    
+    # determine how many years of data at each site; filter for at least 20 years of data; arrange in ascending order
+    
+    # edm_daily_stations <- edm_daily_stations %>% mutate(end.minus.start = end-start) %>% filter(end.minus.start>=20) %>% arrange(end.minus.start)
+  
+    # temp code for > 40 years
+    edm_daily_stations_40 <- edm_daily_stations %>% mutate(end.minus.start = end-start) %>% filter(end.minus.start>=40) %>% arrange(end.minus.start)
+    
+    # temp ... temp; select the second and third stations
+    
+    edm_daily_stations_40 <- edm_daily_stations_40[2:3,]
+    
+   
+    # select the first station and download the data ** not used here; keep for now **
+    
+    # stations <- edm_daily_stations[1,"station_id"]
+     
+    # edm_daily_data <- weather_dl(station_ids = stations,quiet = TRUE,interval = "day",format=TRUE)
+    
+  
+    # download the daily data for the subset of stations
+    
+    edm_daily_data <- weather_dl(station_ids = edm_daily_stations_40$station_id,quiet = TRUE,interval = "day",format=TRUE)
+    
+
+```
+
+
+##  Summary Table - Selected Sites
+
+```{r summary-table, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+    # Note: requires 'edm_daily_data' from previous chunk
+
+    # calculate the unique years at each site
+    
+    unique_years <- edm_daily_data %>% group_by(station_name,station_id) %>% summarize(no.unique.years=length(unique(year))) %>% as.data.frame()
+    
+    # mean temperature each station
+    
+    mean_temp<- edm_daily_data %>% group_by(station_name,station_id) %>% summarize(mean.temp=mean(mean_temp,na.rm=TRUE))%>% as.data.frame()
+    
+    # mean yearly rainfall
+    
+    mean_yearly_rainfall<- edm_daily_data %>% group_by(station_name,station_id,year) %>% summarize(yearly.rainfall=sum(total_rain,na.rm=TRUE)) %>% 
+      group_by(station_name) %>% summarize(mean.rainfall=mean(yearly.rainfall)) %>% as.data.frame()
+    
+     # mean yearly snowfall
+    
+    mean_yearly_snowfall<- edm_daily_data %>% group_by(station_name,station_id,year) %>% summarize(yearly.snowfall=sum(total_snow,na.rm=TRUE)) %>% 
+      group_by(station_name) %>% summarize(mean.snowfall=mean(yearly.snowfall)) %>% as.data.frame()
+    
+    # combine the 4 data sets into one dataframe
+    
+    daily_summary <- cbind(unique_years,mean.temp=mean_temp$mean.temp,mean.rainfall.mm=mean_yearly_rainfall$mean.rainfall,mean.snowfall.cm=mean_yearly_snowfall$mean.snowfall)
+    
+    
+   # use flextable to format the summary table
+    
+    # set up a standard border to 'flextable'; requires 'officer' package
+    std_border <- fp_border(color="black",width=1.5)
+    
+    daily_summary %>%  flextable() %>% 
+    align(align="center",part = "all") %>%
+    font(fontname = "Calibri (Body)", part = "all") %>%
+    fontsize(size = 14, part = "all") %>%
+    colformat_double(j=c(4,5,6),digits = 2) %>%
+    bold(bold=TRUE,part = "header") %>%
+    border_inner(border=std_border,part = "all") %>%
+    # fit_to_width(max_width = 9) %>%
+    bg(bg="#EFEFEF") %>% 
+    autofit()
+
+
+```
+
+##  Select by Latitude & Longitude
+
+![Station search code](images/weathercan station search_2.png)
+
+
+##  Percentage Missing Temp./ Rain / Snow Data
+
+
+```{r missing-data-naniar, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+
+    # Note: requires 'edm_daily_data' from previous chunk
+
+    # Limit ourselves to temperature; precipitation, rainfall; and snowfall for the missing data analysis
+
+    edm_daily_data_6A <- edm_daily_data %>% select(station_id, mean_temp, max_temp, min_temp,total_precip,total_rain, total_snow)
+
+    # missing data plot using 'naniar'
+    
+    edm_daily_data_6A %>%
+    gg_miss_var(show_pct = TRUE, facet = station_id)
+    # labs(title = "Missing Data - Selected Sites")
+
+
+```
+
+
+## Histogram Plot - Six Climate Variables
+
+
+```{r histogram-facet-plot, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+    # select Edmonton Int'l A
+
+    edm_intl_A <- edm_daily_data %>% filter(station_id==1865)
+
+
+    # select the columns of interest before using 'melt'; station_id and date identity individual rows of data
+
+    edm_intl_A <- edm_intl_A %>% select(station_id,date,mean_temp, max_temp, min_temp,total_precip,total_rain, total_snow)
+    
+    # edm_intl_A <- edm_intl_A %>% select(station_id,date,total_precip,total_rain, total_snow)
+
+    # remove the rows with zero precipitation
+
+    edm_intl_A_NZ <- edm_intl_A %>% filter(total_precip > 0)
+
+    # melt the dataframe to long format to facilitate plotting
+
+    daily_NZ_melt <- melt(edm_intl_A_NZ, id.vars = c("station_id", "date"),
+    variable.name = "climate.variable", 
+    value.name = "climate.value")
+
+    # create histograms for each of the variables using facet wrap
+    
+    ggplot(daily_NZ_melt,aes(x=climate.value)) + geom_histogram() + facet_wrap(~climate.variable)
+    
+
+
+```
+
+
+## Quantile- Quantile Plot
+
+```{r qq-plot, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+    # Note: requires 'daily_NZ_melt' from previous chunk
+
+    # create qq plots for each of the variables using facet wrap
+    
+    # copied code from https://mgimond.github.io and modified to suit my data
+
+    ggplot(data=daily_NZ_melt, aes(sample = climate.value)) + stat_qq(distribution = qnorm) +
+    stat_qq_line(line.p = c(0.25, 0.75), col = "blue") + ylab("Height") +
+    facet_wrap(~climate.variable, nrow = 2)
+
+
+```
+
+
+
