@@ -266,9 +266,9 @@ library(rmarkdown)
 ```
 
 
-## Boxplots - Daily Rainfall
+## Boxplots - Daily Rainfall (horiz.)
 
-```{r boxplots-rainfall-multi-site, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+```{r boxplots-rainfall-horiz, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
 
 
     # select the columns of interest before using 'melt'; station_id and date identity individual rows of data
@@ -295,8 +295,7 @@ library(rmarkdown)
     
     # create boxplots
     
-      # ggplot(data=rainfall_multi_NZ, aes(x=stn_id_factor,y=total_rain,fill=stn_id_factor)) +
-        ggplot(data=rainfall_multi_NZ, aes(x=station_name_and_id,y=total_rain,fill=station_name_and_id)) +
+      ggplot(data=rainfall_multi_NZ, aes(x=station_name_and_id,y=total_rain,fill=station_name_and_id)) +
         geom_boxplot() +
         stat_boxplot(geom='errorbar',width=0.3) +  # adds horiz. lines to whiskers
         theme(axis.title.y = element_text(size = 12)) +
@@ -316,11 +315,58 @@ library(rmarkdown)
 
 ```
 
+## Boxplots - Daily Rainfall (vertical)
 
 
+```{r boxplots-rainfall-vertical, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
 
 
-## Quantile- Quantile Plot (Edm. Int'l A # 1865)
+    # select the columns of interest before using 'melt'; station_id and date identity individual rows of data
+
+    rainfall_multi <- edm_daily_data %>% select(station_name,station_id,date,total_rain)
+
+    # create composite with station_name and station_id
+    
+    # station_name_and_id <- paste0(rainfall_multi$station_name,"_",rainfall_multi$station_id)
+    
+    # create a factor of the station_id; cbind into the df; needed to create boxplot
+
+    station_id_as_factor <- as.factor(rainfall_multi$station_id)
+    
+    rainfall_multi <- cbind(rainfall_multi,station_id_as_factor)
+    
+    # filter for rainfall above the cutoff
+    
+    rainfall_cutoff <- 10
+    
+    # filter based on the cutoff value
+
+    rainfall_multi_NZ <- rainfall_multi %>% filter(total_rain > rainfall_cutoff)
+    
+    # create boxplots
+    
+      ggplot(data=rainfall_multi_NZ, aes(x=station_id_as_factor,y=total_rain,fill=station_id_as_factor)) +
+        geom_boxplot() +
+        stat_boxplot(geom='errorbar',width=0.3) +  # adds horiz. lines to whiskers
+        theme(axis.title.y = element_text(size = 12)) +
+        ylab("(mm)") +
+        xlab("") +
+        theme(axis.text.x = element_text(angle = 45,vjust = 0.5,size = 11)) +
+        # coord_flip() +
+        # expand_limits(y=c(0,100)) +
+        # scale_y_continuous(trans = log10_trans()) +
+        guides(fill=FALSE) +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        theme(plot.title = element_text(size = 12)) +
+        ggtitle("Daily Rainfall > 10 mm")
+      #   outfile<-file.path(save_PNG_folder,outfile_name)
+      # ggsave(outfile,p1,width= 8, height=4.944, dpi=600,units=c("in"))
+      
+
+```
+
+
+## Quantile- Quantile Plot (Edm. Int'l A ID# 1865)
 
 ```{r qq-plot, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
 
@@ -337,5 +383,18 @@ library(rmarkdown)
 
 ```
 
+## Total Rainfall Statistics Summary
+
+```{r stats-summary-table, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+
+    # select the columns of interest before using 'melt'; station_id and date identity individual rows of data
+
+    rainfall_multi <- edm_daily_data %>% select(station_name,station_id,date,total_rain)
+
+    
+      
+
+```
 
 
