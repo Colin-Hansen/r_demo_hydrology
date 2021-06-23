@@ -70,9 +70,9 @@ library(rmarkdown)
     # temp code for > 40 years
     edm_daily_stations_40 <- edm_daily_stations %>% mutate(end.minus.start = end-start) %>% filter(end.minus.start>=40) %>% arrange(end.minus.start)
     
-    # temp ... temp; select the second and third stations
+    # temp ... temp; select fewer stations so tables fit on Powerpoint
     
-    # edm_daily_stations_40 <- edm_daily_stations_40[2:3,]
+    edm_daily_stations_40 <- edm_daily_stations_40[1:4,]
     
    
     # select the first station and download the data ** not used here; keep for now **
@@ -388,13 +388,69 @@ library(rmarkdown)
 ```{r stats-summary-table, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
 
 
-    # select the columns of interest before using 'melt'; station_id and date identity individual rows of data
+    # select the columns of interest
 
-    rainfall_multi <- edm_daily_data %>% select(station_name,station_id,date,total_rain)
+    # rainfall_multi <- edm_daily_data %>% select(station_name,station_id,date,total_rain)
 
+    rainfall_multi <- edm_daily_data %>% select(station_id,total_rain)
+
+    # split the dataframe by station_id; returns a list
     
+    rainfall_multi_split <- split(rainfall_multi,rainfall_multi$station_id)
+  
+    # create function to select the 'total_rain' and apply the 'smry' function
       
+    smry_function <- function(x){
+      
+      return(hydroTSM::smry(x$total_rain))
+      
+    } # end of smry_function
 
+   
+     # use 'map' to apply 'smry_function' to the list of dataframes
+    
+    smry_df_list <- rainfall_multi_split %>% map(smry_function)
+    
+   # use 'bind_cols' to combine the list of dataframes to one dataframe
+    
+    x <- bind_cols(smry_df_list)
+    
+   
+    
+    # extract the station_ids
+    
+    station_ids <- edm_daily_stations_40$station_id
+    
+    # correct the column names in 'x' 
+    
+    names(x) <- paste0("Station.id.",station_ids)
+    
+    # get the names of the 'smry' statistical parameters
+    
+    Statistic <- rownames(x)
+    
+    # cbind in 'Statistic'
+    
+    x <- cbind(Statistic,x)
+    
+   
+     # use flextable to format the summary table
+    
+    # set up a standard border to 'flextable'; requires 'officer' package
+    std_border <- fp_border(color="black",width=1.5)
+    
+    x %>%  flextable() %>% 
+    align(align="center",part = "all") %>% 
+    font(fontname = "Calibri (Body)", part = "all") %>%
+    fontsize(size = 14, part = "all") %>%
+    colformat_double(digits = 2) %>%
+    colformat_double(i=c(12,13),digits = 0) %>% 
+    bold(bold=TRUE,part = "header") %>%
+    border_inner(border=std_border,part = "all") %>%
+    # fit_to_width(max_width = 9) %>%
+    bg(bg="#EFEFEF") %>%
+    autofit()
+    
 ```
 
 
