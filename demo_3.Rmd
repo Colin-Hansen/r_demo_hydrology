@@ -1,0 +1,251 @@
+---
+title: ""
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# note to self; load 'plyr' before 'dplyr' / 'tidyverse'; see page 151 ' R for Everyone'
+
+library(plyr)
+library(tidyverse)
+# note: tidyverse includes 'dplyr' package but not 'plyr'
+
+library(printr)
+library(reshape2)
+library(pander)
+
+library(lubridate)
+library(scales)
+library(rio)
+library(knitr)
+library(tinytex)
+library(ggnewscale)
+library(hydroTSM)
+library(cowplot)
+library(flextable)
+library(officer) #see page 30 'flextable' package
+library(weathercan)
+library(lutz) # required to download wx stations in weathercan
+library(sf) # required to download wx stations in weathercan
+library(naniar)
+library(rmarkdown)
+library(RcppRoll)
+library(lmom)
+
+
+```
+
+
+##  Rainfall Frequency Analysis
+
+- Obtain City of Calgary 5-minute rainfall data for 4 sites
+- Determine the 1 hr / 4 hr / 12 hr rainfall amounts using a rolling window approach
+- Extract the annual maximum 1 hr / 4 hr / 12 hr rainfall amounts for each site
+- Fit a frequency distribution (e.g. Gumbel, GEV, PE3) to the annual maximum rainfall amounts (L-Moments)
+
+
+```{r annual-max-rainfalls, eval = TRUE, include=FALSE, cache=TRUE}
+
+    # read City of Calgary 5-minute rainfall data
+
+    # get list of file names and paths
+
+    files_CSV <- dir('City rain gauges_4',full.names=TRUE)
+    
+
+    # function to read and process the data for one site
+
+    read_and_process_function <- function(x) {
+      
+      # read the CSV file
+      
+      rain_5_min<-read.table(x,sep=",",header=TRUE,stringsAsFactors = FALSE)
+      
+      # filter for months May to September
+      
+      rain_5_min <- rain_5_min %>% filter(Month >= 5 & Month <= 9)
+          
+      # filter by Year
+      
+      rain_5_min <- rain_5_min %>% filter(Year > 1999)
+    
+      # use roll_sum from the 'RcppRoll' package * with 12 X 5 minutes = 1 hour
+      
+      rain_5_min<- rain_5_min %>% mutate(rollsum.one.hr = roll_sum(Rainfall,12,align="left",fill=NA))
+      
+      # use roll_sum from the 'RcppRoll' package * with 48 X 5 minutes = 4 hours
+      
+      rain_5_min<- rain_5_min %>% mutate(rollsum.four.hr = roll_sum(Rainfall,48,align="left",fill=NA))
+        
+      # use roll_sum from the 'RcppRoll' package * with 144 X 5 minutes = 12 hours
+      
+      rain_5_min<- rain_5_min %>% mutate(rollsum.twelve.hr = roll_sum(Rainfall,144,align="left",fill=NA))
+        
+      
+      # summarize to get the annual max ONE HOUR rolling sum rainfall for each site
+      
+      one_hour<- rain_5_min %>% group_by(Year) %>% summarize(one.hr=max(rollsum.one.hr,na.rm=TRUE))
+      
+      # summarize to get the annual max FOUR HOUR rolling sum rainfall for each site
+      
+      four_hour<- rain_5_min %>% group_by(Year) %>% summarize(four.hr=max(rollsum.four.hr,na.rm=TRUE))
+      
+      # summarize to get the annual max TWELVE HOUR rolling sum rainfall for each site
+      
+      twelve_hour<- rain_5_min %>% group_by(Year) %>% summarize(twelve.hr=max(rollsum.twelve.hr,na.rm=TRUE))
+      
+      # bind the results into a single dataframe
+      
+      annual_maximums <- cbind(one_hour,four_hour,twelve_hour)
+      
+      # get the site name
+      
+      site_prefix <- rain_5_min[1,1]
+      
+      # create a vector of site names; cbind into the results dataframe
+      
+      site_name <- rep(site_prefix,nrow(annual_maximums))
+      
+      annual_maximums <- cbind(site_name,annual_maximums)
+      
+      # remove redundant columns 4 & 6 with 'Year'
+      
+      annual_maximums <- annual_maximums %>% select(-4,-6)
+      
+      # view(annual_maximums)
+      
+      # create directory name for the annual max results
+      annual_max_folder<-'data_out/demo_3a'
+     
+      # create (if necessary) 'data_out/demo_3a' directory
+      if(dir.exists(annual_max_folder) == FALSE) dir.create(annual_max_folder)
+          
+      
+      # create .CSV outfile names (dynamic)
+      annual_max_name<-paste0(site_prefix,"_annual_maximum_rainfall.csv")
+      annual_max_outfile<-file.path(annual_max_folder, annual_max_name)
+       
+      # write the above results to .CSV files
+      write.table(annual_maximums,annual_max_outfile,sep=",",col.names=TRUE,row.names=FALSE)
+      
+    
+      
+      # fit a Gumbel distribution to the one hour annual max. data
+      Gumbel_1hr_param<-pelgum(samlmu(one_hour$one.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
+     
+      # get the 1-hour quantiles for the Gumbel distribution
+      T<-c(2,5,10,25,50,100,200,500)
+      probs<-1-1/T
+      Gumbel_1hr<-quagum(probs,Gumbel_1hr_param)
+      
+     
+      # fit a Gumbel distribution to the four hour annual max. data
+      Gumbel_4hr_param<-pelgum(samlmu(four_hour$four.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
+     
+      # get the 4-hour quantiles for the Gumbel distribution
+      T<-c(2,5,10,25,50,100,200,500)
+      probs<-1-1/T
+      Gumbel_4hr<-quagum(probs,Gumbel_4hr_param)
+      
+      
+      # fit a Gumbel distribution to the twelve hour annual max. data
+      Gumbel_12hr_param<-pelgum(samlmu(twelve_hour$twelve.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
+     
+      # get the 12-hour quantiles for the Gumbel distribution
+      T<-c(2,5,10,25,50,100,200,500)
+      probs<-1-1/T
+      Gumbel_12hr<-quagum(probs,Gumbel_12hr_param)
+      
+     
+      # cbind into a dataframe
+      gumbel_df<-as.data.frame(cbind(site_prefix,T,Gumbel_1hr,Gumbel_4hr,Gumbel_12hr))
+      names(gumbel_df)<-c("Site.Name","T","Gumbel.one.hr.mm","Gumbel.four.hr.mm","Gumbel.twelve.hr.mm")
+      
+      
+       # create directory name for the Gumbel results
+      gumbel_folder<-'data_out/demo_3b'
+     
+      # create (if necessary) 'data_out/demo_3b' directory
+      if(dir.exists(gumbel_folder) == FALSE) dir.create(gumbel_folder)
+          
+      # create .CSV outfile names (dynamic)
+      f_name<-paste0(site_prefix,"_Gumbel_quantiles.csv")
+      gumbel_outfile<-file.path(gumbel_folder, f_name)
+      
+     # write the above results to .CSV files
+      write.table(gumbel_df,gumbel_outfile,sep=",",col.names=TRUE,row.names=FALSE)
+      
+      
+    } # end read_and_process_function
+
+
+        # use map to apply the 'read_and_process_function'
+    
+    rain_5_min_list <- files_CSV %>% map(read_and_process_function)
+    
+    
+    # select columns of interest ** not used here **
+    
+    # columns_to_keep <- names(hourly_data_3[c(1,2,13,14,15,16,20)])
+    # 
+    # hourly_data_3s <- hourly_data_3 %>% select(all_of(columns_to_keep))
+    
+    
+```
+
+##  Annuual Maximum Rainfall - Site S03
+
+```{r annual-max-barchart, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+      # read the S03 annual maximum data
+  
+      infile<-file.path('data_out/demo_3a/S03_annual_maximum_rainfall.csv')
+
+      S03_ams<-read.table(infile,sep=",",header=TRUE,stringsAsFactors = FALSE)
+      
+      # plot the 1 hour data
+      
+      S03_ams_1_hr <- S03_ams %>% select(Year,one.hr)
+      
+      # change the year from numeric to factor
+      
+      ggplot(data=S03_ams_1_hr, aes(x = factor(Year),y = one.hr,fill=Year)) +
+        geom_bar(stat = "identity",position=position_dodge()) +
+        theme(axis.title.x = element_text(size = 12),axis.text.x = element_text(angle=45,hjust=1)) +
+        theme(axis.title.y = element_text(size = 12)) +
+        ylab("(mm)") +
+        xlab("") +
+        guides(fill=FALSE) +
+        theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        theme(plot.title = element_text(size = 12)) +
+        ggtitle("Site S03 One Hour Annual Maximum Rainfall")
+      
+```
+
+
+##  Gumbel Distribution
+- add L-Moments info
+
+![Station search code](images/weathercan station search_2.png)
+
+
+
+##  Gumbel Results
+
+
+```{r gumbel-freq-analysis, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+  # show a sample of the raw data
+
+
+
+
+```
+
+
+
+
+
