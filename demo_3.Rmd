@@ -67,9 +67,9 @@ library(lmom)
       
       rain_5_min <- rain_5_min %>% filter(Month >= 5 & Month <= 9)
           
-      # filter by Year
+      # filter by Year; ** TEMPORARY SETTING IS 2015
       
-      rain_5_min <- rain_5_min %>% filter(Year > 1999)
+      rain_5_min <- rain_5_min %>% filter(Year > 2015)
     
       # use roll_sum from the 'RcppRoll' package * with 12 X 5 minutes = 1 hour
       
@@ -114,6 +114,8 @@ library(lmom)
       
       annual_maximums <- annual_maximums %>% select(-4,-6)
       
+      # str(annual_maximums)
+      
       # view(annual_maximums)
       
       # create directory name for the annual max results
@@ -130,41 +132,53 @@ library(lmom)
       # write the above results to .CSV files
       write.table(annual_maximums,annual_max_outfile,sep=",",col.names=TRUE,row.names=FALSE)
       
-    
       
-      # fit a Gumbel distribution to the one hour annual max. data
-      Gumbel_1hr_param<-pelgum(samlmu(one_hour$one.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
-     
-      # get the 1-hour quantiles for the Gumbel distribution
-      T<-c(2,5,10,25,50,100,200,500)
-      probs<-1-1/T
-      Gumbel_1hr<-quagum(probs,Gumbel_1hr_param)
+      # STOPPED HERE 24 JUNE 2021
       
-     
-      # fit a Gumbel distribution to the four hour annual max. data
-      Gumbel_4hr_param<-pelgum(samlmu(four_hour$four.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
-     
-      # get the 4-hour quantiles for the Gumbel distribution
-      T<-c(2,5,10,25,50,100,200,500)
-      probs<-1-1/T
-      Gumbel_4hr<-quagum(probs,Gumbel_4hr_param)
+      # make a list of the 1 hr / 4 hr / 12 hour maximums, keeping the numeric data only
+      
+      rain_max_list <- list(one_hour$one.hr,four_hour$four.hr,twelve_hour$twelve.hr)
+      
+      # Gumbel function
+      
+      Gumbel_function <- function(x) {
+        
+        # fit a Gumbel distribution to the annual max. data
+          
+        Gumbel_param<-pelgum(samlmu(x,nmom=4,sort.data=TRUE,ratios=FALSE))
+       
+        # get the quantiles for the Gumbel distribution
+        
+        T<-c(2,5,10,25,50,100,200,500)
+        probs<-1-1/T
+        Gumbel_1hr<-quagum(probs,Gumbel_param)
+        
+        
+      } # end of Gumbel function
       
       
-      # fit a Gumbel distribution to the twelve hour annual max. data
-      Gumbel_12hr_param<-pelgum(samlmu(twelve_hour$twelve.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
-     
-      # get the 12-hour quantiles for the Gumbel distribution
-      T<-c(2,5,10,25,50,100,200,500)
-      probs<-1-1/T
-      Gumbel_12hr<-quagum(probs,Gumbel_12hr_param)
+      # use map to apply the Gumbel function to 'rain_max_list'
       
-     
+      Gumbel_results_list <- rain_max_list %>% map(Gumbel_function)
+      
+      
+      # use 'bind_cols' to combine the list of dataframes to one dataframe
+      
+      Gumbel_results_df <- bind_cols(Gumbel_results_list)
+      
+      # add column names
+      # colnames(Gumbel_results_df) <- c("One.Hour.mm","Four.Hour.mm","Twelve.Hour.mm")
+      
       # cbind into a dataframe
-      gumbel_df<-as.data.frame(cbind(site_prefix,T,Gumbel_1hr,Gumbel_4hr,Gumbel_12hr))
-      names(gumbel_df)<-c("Site.Name","T","Gumbel.one.hr.mm","Gumbel.four.hr.mm","Gumbel.twelve.hr.mm")
       
+      T<-c(2,5,10,25,50,100,200,500)
       
-       # create directory name for the Gumbel results
+      Gumbel_results_df<-as.data.frame(cbind(site_prefix,T,Gumbel_results_df))
+      names(Gumbel_results_df)<-c("Site.Name","T","Gumbel.one.hr.mm","Gumbel.four.hr.mm","Gumbel.twelve.hr.mm")
+      
+      view(Gumbel_results_df)
+      
+      # create directory name for the Gumbel results
       gumbel_folder<-'data_out/demo_3b'
      
       # create (if necessary) 'data_out/demo_3b' directory
@@ -175,7 +189,44 @@ library(lmom)
       gumbel_outfile<-file.path(gumbel_folder, f_name)
       
      # write the above results to .CSV files
-      write.table(gumbel_df,gumbel_outfile,sep=",",col.names=TRUE,row.names=FALSE)
+      write.table(Gumbel_results_df,gumbel_outfile,sep=",",col.names=TRUE,row.names=FALSE)
+      
+      
+      
+      
+      # # fit a Gumbel distribution to the one hour annual max. data
+      # Gumbel_1hr_param<-pelgum(samlmu(one_hour$one.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
+      # 
+      # # get the 1-hour quantiles for the Gumbel distribution
+      # T<-c(2,5,10,25,50,100,200,500)
+      # probs<-1-1/T
+      # Gumbel_1hr<-quagum(probs,Gumbel_1hr_param)
+      # 
+      # 
+      # # fit a Gumbel distribution to the four hour annual max. data
+      # Gumbel_4hr_param<-pelgum(samlmu(four_hour$four.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
+      # 
+      # # get the 4-hour quantiles for the Gumbel distribution
+      # T<-c(2,5,10,25,50,100,200,500)
+      # probs<-1-1/T
+      # Gumbel_4hr<-quagum(probs,Gumbel_4hr_param)
+      # 
+      # 
+      # # fit a Gumbel distribution to the twelve hour annual max. data
+      # Gumbel_12hr_param<-pelgum(samlmu(twelve_hour$twelve.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
+      # 
+      # # get the 12-hour quantiles for the Gumbel distribution
+      # T<-c(2,5,10,25,50,100,200,500)
+      # probs<-1-1/T
+      # Gumbel_12hr<-quagum(probs,Gumbel_12hr_param)
+      # 
+      # 
+      # # cbind into a dataframe
+      # gumbel_df<-as.data.frame(cbind(site_prefix,T,Gumbel_1hr,Gumbel_4hr,Gumbel_12hr))
+      # names(gumbel_df)<-c("Site.Name","T","Gumbel.one.hr.mm","Gumbel.four.hr.mm","Gumbel.twelve.hr.mm")
+      
+      
+     
       
       
     } # end read_and_process_function
@@ -227,10 +278,11 @@ library(lmom)
 
 
 ##  Gumbel Distribution
-- add L-Moments info
+- 2 parameter extreme value distribution
+- historically used by Environment Canada for rainfall IDF analysis
 
-![Station search code](images/weathercan station search_2.png)
-
+![Station search code](images/Gumbel_1.png)
+![Station search code](images/Gumbel_2.png)
 
 
 ##  Gumbel Results
