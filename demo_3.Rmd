@@ -38,16 +38,25 @@ library(lmom)
 ```
 
 
-##  Rainfall Frequency Analysis
+##  Rainfall Frequency Analysis in R - Intro
 
-- Obtain City of Calgary 5-minute rainfall data for 4 sites
-- Determine the 1 hr / 4 hr / 12 hr rainfall amounts using a rolling window approach
-- Extract the annual maximum 1 hr / 4 hr / 12 hr rainfall amounts for each site
-- Fit a frequency distribution (e.g. Gumbel, GEV, PE3) to the annual maximum rainfall amounts (L-Moments)
+- Several R packages are available for frequency analysis
+  - e.g. FAdist, lfstat, extRemes, lmom, lmom-rfa
+  
+- some techniques for parameter estimation:
+  - MOM (Method of Moments)
+  - MLM (Method of Maximum Likelihood)
+  - PWM (Probability Weighted Moments)
+  - LMOM (L-Moments)
 
 
-```{r annual-max-rainfalls, eval = TRUE, include=FALSE, cache=TRUE}
+```{r process-City-rain-data-and-L-mom, eval = TRUE, include=TRUE, cache=TRUE}
 
+    # clean out all the old files
+
+    rm(list=ls())
+
+    
     # read City of Calgary 5-minute rainfall data
 
     # get list of file names and paths
@@ -67,9 +76,9 @@ library(lmom)
       
       rain_5_min <- rain_5_min %>% filter(Month >= 5 & Month <= 9)
           
-      # filter by Year; ** TEMPORARY SETTING IS 2015
+      # filter by Year; ** TEMPORARY SETTING IS 2010
       
-      rain_5_min <- rain_5_min %>% filter(Year > 2015)
+      rain_5_min <- rain_5_min %>% filter(Year > 2010)
     
       # use roll_sum from the 'RcppRoll' package * with 12 X 5 minutes = 1 hour
       
@@ -133,100 +142,68 @@ library(lmom)
       write.table(annual_maximums,annual_max_outfile,sep=",",col.names=TRUE,row.names=FALSE)
       
       
-      # STOPPED HERE 24 JUNE 2021
+      # code for frequency analysis using L-Moments - optional
       
-      # make a list of the 1 hr / 4 hr / 12 hour maximums, keeping the numeric data only
+      lmoments <- "no"
       
-      rain_max_list <- list(one_hour$one.hr,four_hour$four.hr,twelve_hour$twelve.hr)
-      
-      # Gumbel function
-      
-      Gumbel_function <- function(x) {
+      if (lmoments=="yes") {
         
-        # fit a Gumbel distribution to the annual max. data
+      
+        # make a list of the 1 hr / 4 hr / 12 hour maximums, keeping the numeric data only
+        
+        rain_max_list <- list(one_hour$one.hr,four_hour$four.hr,twelve_hour$twelve.hr)
+        
+        # Gumbel function
+        
+        Gumbel_function_Lmom <- function(x) {
           
-        Gumbel_param<-pelgum(samlmu(x,nmom=4,sort.data=TRUE,ratios=FALSE))
+          # fit a Gumbel distribution to the annual max. data
+            
+          Gumbel_param<-pelgum(samlmu(x,nmom=4,sort.data=TRUE,ratios=FALSE))
+         
+          # get the quantiles for the Gumbel distribution
+          
+          Return.Period<-c(2,5,10,25,50,100,200,500)
+          probs<-1-1/Return.Period
+          Gumbel_1hr<-quagum(probs,Gumbel_param)
+          
+          
+        } # end of Gumbel function
+        
+        
+        # use map to apply the Gumbel function to 'rain_max_list'
+        
+        Gumbel_results_list <- rain_max_list %>% map(Gumbel_function_Lmom)
+        
+        
+        # use 'bind_cols' to combine the list of dataframes to one dataframe
+        
+        Gumbel_results_df <- bind_cols(Gumbel_results_list)
+        
+        # cbind into a dataframe
+        
+        Return.Period<-c(2,5,10,25,50,100,200,500)
+        
+        Gumbel_results_df<-as.data.frame(cbind(site_prefix,Return.Period,Gumbel_results_df))
+        
+        names(Gumbel_results_df)<-c("Site.Name","Return.Period","one.hr.mm","four.hr.mm","twelve.hr.mm")
+        
+        # view(Gumbel_results_df)
+        
+        # create directory name for the Gumbel results
+        gumbel_folder<-'data_out/demo_3b'
        
-        # get the quantiles for the Gumbel distribution
+        # create (if necessary) 'data_out/demo_3b' directory
+        if(dir.exists(gumbel_folder) == FALSE) dir.create(gumbel_folder)
+            
+        # create .CSV outfile names (dynamic)
+        f_name<-paste0(site_prefix,"_Gumbel_quantiles.csv")
+        gumbel_outfile<-file.path(gumbel_folder, f_name)
         
-        T<-c(2,5,10,25,50,100,200,500)
-        probs<-1-1/T
-        Gumbel_1hr<-quagum(probs,Gumbel_param)
-        
-        
-      } # end of Gumbel function
-      
-      
-      # use map to apply the Gumbel function to 'rain_max_list'
-      
-      Gumbel_results_list <- rain_max_list %>% map(Gumbel_function)
-      
-      
-      # use 'bind_cols' to combine the list of dataframes to one dataframe
-      
-      Gumbel_results_df <- bind_cols(Gumbel_results_list)
-      
-      # add column names
-      # colnames(Gumbel_results_df) <- c("One.Hour.mm","Four.Hour.mm","Twelve.Hour.mm")
-      
-      # cbind into a dataframe
-      
-      T<-c(2,5,10,25,50,100,200,500)
-      
-      Gumbel_results_df<-as.data.frame(cbind(site_prefix,T,Gumbel_results_df))
-      names(Gumbel_results_df)<-c("Site.Name","T","Gumbel.one.hr.mm","Gumbel.four.hr.mm","Gumbel.twelve.hr.mm")
-      
-      view(Gumbel_results_df)
-      
-      # create directory name for the Gumbel results
-      gumbel_folder<-'data_out/demo_3b'
-     
-      # create (if necessary) 'data_out/demo_3b' directory
-      if(dir.exists(gumbel_folder) == FALSE) dir.create(gumbel_folder)
-          
-      # create .CSV outfile names (dynamic)
-      f_name<-paste0(site_prefix,"_Gumbel_quantiles.csv")
-      gumbel_outfile<-file.path(gumbel_folder, f_name)
-      
-     # write the above results to .CSV files
-      write.table(Gumbel_results_df,gumbel_outfile,sep=",",col.names=TRUE,row.names=FALSE)
-      
-      
-      
-      
-      # # fit a Gumbel distribution to the one hour annual max. data
-      # Gumbel_1hr_param<-pelgum(samlmu(one_hour$one.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
-      # 
-      # # get the 1-hour quantiles for the Gumbel distribution
-      # T<-c(2,5,10,25,50,100,200,500)
-      # probs<-1-1/T
-      # Gumbel_1hr<-quagum(probs,Gumbel_1hr_param)
-      # 
-      # 
-      # # fit a Gumbel distribution to the four hour annual max. data
-      # Gumbel_4hr_param<-pelgum(samlmu(four_hour$four.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
-      # 
-      # # get the 4-hour quantiles for the Gumbel distribution
-      # T<-c(2,5,10,25,50,100,200,500)
-      # probs<-1-1/T
-      # Gumbel_4hr<-quagum(probs,Gumbel_4hr_param)
-      # 
-      # 
-      # # fit a Gumbel distribution to the twelve hour annual max. data
-      # Gumbel_12hr_param<-pelgum(samlmu(twelve_hour$twelve.hr,nmom=4,sort.data=TRUE,ratios=FALSE))
-      # 
-      # # get the 12-hour quantiles for the Gumbel distribution
-      # T<-c(2,5,10,25,50,100,200,500)
-      # probs<-1-1/T
-      # Gumbel_12hr<-quagum(probs,Gumbel_12hr_param)
-      # 
-      # 
-      # # cbind into a dataframe
-      # gumbel_df<-as.data.frame(cbind(site_prefix,T,Gumbel_1hr,Gumbel_4hr,Gumbel_12hr))
-      # names(gumbel_df)<-c("Site.Name","T","Gumbel.one.hr.mm","Gumbel.four.hr.mm","Gumbel.twelve.hr.mm")
-      
-      
-     
+       # write the above results to .CSV files
+        write.table(Gumbel_results_df,gumbel_outfile,sep=",",col.names=TRUE,row.names=FALSE)
+  
+      } # end of if lmoments equals "yes"
       
       
     } # end read_and_process_function
@@ -234,9 +211,10 @@ library(lmom)
 
         # use map to apply the 'read_and_process_function'
     
-    rain_5_min_list <- files_CSV %>% map(read_and_process_function)
+      rain_5_min_list <- files_CSV %>% map(read_and_process_function)
     
-    
+  
+      
     # select columns of interest ** not used here **
     
     # columns_to_keep <- names(hourly_data_3[c(1,2,13,14,15,16,20)])
@@ -246,7 +224,282 @@ library(lmom)
     
 ```
 
+
+##  Gumbel Distribution - Background
+
+- 2 parameter extreme value distribution
+- historically used by Environment Canada for rainfall IDF analysis
+- theoretically the 3-parameter GEV distribution is preferred for analysis of annual max. series of data
+
+![Gumbel pdf](images/Gumbel_7.2.1.png)
+
+![Gumbel parameters](images/Gumbel_7.2.5_7.2.6.png)
+
+![Gumbel Return Period Quantiles](images/Gumbel_7.2.19.png)
+
+
+
+##  Frequency Analysis - Methodology
+
+- Obtained City of Calgary 5-minute rainfall data for 4 sites
+- Determined the 1 hr / 4 hr / 12 hr rainfall amounts using a rolling window approach
+- Extracted the annual maximum 1 hr / 4 hr / 12 hr rainfall amounts for each site
+- Fit the Gumbel distribution to the annual maximum rainfall series for each site (Method of Moments)
+
+##  Frequency Analysis - Results - 1
+
+
+```{r gumbel-method-of-moments, eval = TRUE, include=TRUE, cache=FALSE,message=FALSE, warning=FALSE}
+
+  # estimate Gumbel parameters using MOM; estimate quantiles and confidence limits
+
+  
+   # get list of file names and paths
+
+    files_CSV <- dir('data_out/demo_3a',full.names=TRUE)
+
+    # create directory name for the Gumbel - Mom results
+      gumbel_mom_folder<-'data_out/demo_3c'
+     
+      # create (if necessary) 'data_out/demo_3a' directory
+      if(dir.exists(gumbel_mom_folder) == FALSE) dir.create(gumbel_mom_folder)
+
+
+        # Gumbel function - Method of Moments
+      
+      Gumbel_function_Mom <- function(x) {
+        
+        # T values
+        
+        T<-c(2,5,10,25,50,100,200,500)
+        
+        # mean and var
+        
+        m1 <- mean(x)
+         
+        m2 <- var(x)
+
+        # alpha and beta parameters (Rao, Eq. 7.25, 7.2.6)
+        
+        alpha <- 0.7797*sqrt(m2)
+        
+        beta <- m1-0.45005*sqrt(m2)
+        
+        # rainfall quantiles (Rao, Eq. 7.2.19); note: log defaults to natural logs
+        
+        xt <- beta - alpha*log(-log(1-1/T))
+        
+        # view(xt)
+        
+        
+        # compute the standard error (Rao, Eq. 7.2.24, and Eq. 7.2.26)
+        
+        # get the number of years of annual maximum rainfall values
+        
+        N <- length(x)
+      
+        Y <- -log(-log(1-1/T))
+        
+        sT_squared <- (alpha^2/N)*(1.15894+0.19187*Y+1.1*Y^2)
+        
+        ST <- sqrt(sT_squared)
+        
+        # compute the confidence intervals; approach from https://ibis.geog.ubc.ca/~rdmoore/rcode/Gumplot-idf.r
+        
+        LB = xt - qt(0.975, N-1)*ST
+        
+        UB = xt + qt(0.975, N-1)*ST
+        
+        # bind the results
+        
+        xt <- cbind(xt,LB,UB)
+        
+        # view(class(xt))
+        
+        # convert to dataframe
+        
+        xt <- as.data.frame(xt)
+        
+        
+      } # end of Gumbel_function
+      
+      
+      
+    # seq_along the files and get the Gumbel parameters, quantiles, confidence limits
+
+    for (k in seq_along(files_CSV)) {
+      
+      ams<-read.table(files_CSV[k],sep=",",header=TRUE,stringsAsFactors = FALSE)
+      
+      # get the site name
+      
+      site_prefix <- ams[1,1]
+      
+      # extract vectors of the rainfall values
+      
+      one_hour <- ams$one.hr
+     
+      four_hour <- ams$four.hr
+      
+      twelve_hour <- ams$twelve.hr
+      
+      # create a list of the ams values
+      
+      ams_list <- list(one_hour,four_hour,twelve_hour)
+      
+      # use map to apply the Gumbel function to the 'ams_list'
+      
+      Gumbel_results <- ams_list %>% map(Gumbel_function_Mom)
+      
+      # use bind_cols to combine the Gumbel results
+      
+      Gumbel_results_df <- bind_cols(Gumbel_results)
+      
+      # rename the columns in 'Gumbel_results_df' (total of 9 columns)
+      
+      
+      names(Gumbel_results_df) <- c("One.hr.mm","One.hr.CL.95%.LB","One.hr.CL.95%.UB","Four.hr.mm","Four.hr.CL.95%.LB","Four.hr.CL.95%.UB","Twelve.hr.mm","Twelve.hr.CL.95%.LB","Twelve.hr.CL.95%.UB")
+      
+      # bind in the return period
+      
+      Return.Period<-c(2,5,10,25,50,100,200,500)
+
+      Gumbel_results_df <- cbind(Return.Period,Gumbel_results_df)
+      
+      
+      # save the results 
+      
+      # create .CSV outfile names (dynamic)
+      temp_file_name<-paste0(site_prefix,"_gumbel_mom_results.csv")
+      gumbel_outfile<-file.path(gumbel_mom_folder, temp_file_name)
+      
+      # write the results to .CSV file
+      write.table(Gumbel_results_df,gumbel_outfile,sep=",",col.names=TRUE,row.names=FALSE)
+      
+      # output table
+      
+       # use flextable to format the summary table
+    
+        # set up a standard border to 'flextable'; requires 'officer' package
+        std_border <- fp_border(color="black",width=1.5)
+        
+        Gumbel_results_df %>%  flextable() %>% 
+        align(align="center",part = "all") %>% 
+        font(fontname = "Calibri (Body)", part = "all") %>%
+        fontsize(size = 12, part = "all") %>%
+        # colformat_double(digits = 2) %>%
+        # colformat_double(i=c(12,13),digits = 0) %>% 
+        bold(bold=TRUE,part = "header") %>%
+        border_inner(border=std_border,part = "all") %>%
+        # fit_to_width(max_width = 9) %>%
+        bg(bg="#EFEFEF") %>%
+        autofit()
+      
+      
+      
+      # plot the results
+      
+      # select the one.hour data
+      
+      g_1 <- Gumbel_results_df[,1:4]
+      
+      # melt the dataframe to long format to facilitate plotting
+
+      g_1_melt <- melt(g_1, id.vars = "Return.Period",
+      variable.name = "variable.name",
+      value.name = "variable.value")
+
+
+    # create point and line chart
+
+      # chart title (dynamic)
+      chart_title <- paste0(site_prefix," One Hour Return Period Rainfalls (Gumbel-MOM)")
+      
+      # create chart PNG outifle name (dynamic)
+      outfile_name<-paste0(site_prefix,"_", 'One_Hour_Gumbel_Plot.png')
+      
+      # create directory name to save the charts
+      g_chart_folder<-'data_out/demo_3d'
+     
+      # create (if necessary) 'data_out/demo_3d' directory
+      if(dir.exists(g_chart_folder) == FALSE) dir.create(g_chart_folder)      
+      
+      # ggplot and save
+      
+      p1 <- ggplot(data=g_1_melt, aes(x=Return.Period,y=variable.value,group=variable.name,colour=variable.name)) +
+        geom_line() +
+        geom_point() +
+        scale_x_continuous(trans = log10_trans()) +
+        expand_limits(x=c(1,1000)) +
+        ylab("(mm)") +
+        xlab("Return Period") +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        guides(fill=guide_legend(title=NULL)) +
+        ggtitle(chart_title)
+      
+        # save the chart
+        outfile<-file.path(g_chart_folder,outfile_name)
+        ggsave(outfile,p1,width= 8, height=4.944, dpi=600,units=c("in"))
+     
+      
+    } # end of seq_along files
+    
+      
+     # output sample table - Site S03
+      
+      # read the S03 annual maximum data; select the columns of interest
+  
+      infile<-file.path('data_out/demo_3c/S03_gumbel_mom_results.csv')
+
+      S03_gumbel<-read.table(infile,sep=",",header=TRUE,stringsAsFactors = FALSE)
+      
+      S03_gumbel <- S03_gumbel %>% select(1,2,5,8)     
+      
+      
+      
+       # use flextable to format the summary table
+    
+        # set up a standard border to 'flextable'; requires 'officer' package
+        std_border <- fp_border(color="black",width=1.5)
+        
+        S03_gumbel %>%  flextable() %>% 
+        align(align="center",part = "all") %>% 
+        font(fontname = "Calibri (Body)", part = "all") %>%
+        fontsize(size = 12, part = "all") %>%
+        # colformat_double(digits = 2) %>%
+        # colformat_double(i=c(12,13),digits = 0) %>% 
+        bold(bold=TRUE,part = "header") %>%
+        border_inner(border=std_border,part = "all") %>%
+        # fit_to_width(max_width = 9) %>%
+        bg(bg="#EFEFEF") %>%
+        autofit()
+      
+      
+      
+      
+      
+    # output one chart for the PowerPoint file
+      
+      # ggplot 1 hour, of the last site that was processed 
+      
+        ggplot(data=g_1_melt, aes(x=Return.Period,y=variable.value,group=variable.name,colour=variable.name)) +
+        geom_line() +
+        geom_point() +
+        scale_x_continuous(trans = log10_trans()) +
+        expand_limits(x=c(1,1000)) +
+        ylab("(mm)") +
+        xlab("Return Period") +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        guides(fill=guide_legend(title=NULL)) +
+        ggtitle(chart_title)
+      
+      
+
+```
+
+
 ##  Annuual Maximum Rainfall - Site S03
+
 
 ```{r annual-max-barchart, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
 
@@ -277,25 +530,67 @@ library(lmom)
 ```
 
 
-##  Gumbel Distribution
-- 2 parameter extreme value distribution
-- historically used by Environment Canada for rainfall IDF analysis
-
-![Station search code](images/Gumbel_1.png)
-![Station search code](images/Gumbel_2.png)
+##  Gumbel Results #1 - UNUSED - KEEP FOR NOW - has 'plotgrid'
 
 
-##  Gumbel Results
+```{r gumbel-bar-chart-1, eval= FALSE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis',fig.width=10,fig.asp=0.618}
 
+  
+      # read the S03 Gumbel results 
+  
+      infile<-file.path('data_out/demo_3b/S03_Gumbel_quantiles.csv')
 
-```{r gumbel-freq-analysis, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+      gumbel<-read.table(infile,sep=",",header=TRUE,stringsAsFactors = FALSE)
+      
+      # insert a factor with '1_hour' to allow for plotting and cbind in
+      
+      one_hour <- rep('1_hour',nrow(gumbel))
+      
+      gumbel <- cbind(gumbel,one_hour)
+     
+     
+     ## STOPPED HERE 26 JUNE 2021
+      
+      
+      # create bar chart for the one hour results
+   
+      p1 <- ggplot(data=gumbel, aes(x=factor(Return.Period),y=one.hr.mm,fill=Return.Period)) +
+        geom_bar(stat = "identity",position=position_dodge()) +
+        theme(axis.title.x = element_text(size = 12),axis.text.x = element_text(angle=45,hjust=1)) +
+        theme(axis.title.y = element_text(size = 12)) +
+        ylab("(mm)") +
+        xlab("Return Period") +
+        guides(fill=FALSE) +
+        theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        theme(plot.title = element_text(size = 12)) +
+        ggtitle("Site S03 One Hour Rainfall Amounts")
+      
 
-  # show a sample of the raw data
-
-
-
+      
+       # create bar chart for the four hour results
+   
+      p2 <- ggplot(data=gumbel, aes(x=factor(Return.Period),y=four.hr.mm,fill=Return.Period)) +
+        geom_bar(stat = "identity",position=position_dodge()) +
+        theme(axis.title.x = element_text(size = 12),axis.text.x = element_text(angle=45,hjust=1)) +
+        theme(axis.title.y = element_text(size = 12)) +
+        ylab("(mm)") +
+        xlab("Return Period") +
+        guides(fill=FALSE) +
+        theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        theme(plot.title = element_text(size = 12)) +
+        ggtitle("Site S03 Four Hour Rainfall Amounts")
+      
+      
+      # plot the charts using 'plotgrid' from cowplot package 
+      
+      plot_grid(p1, p2, ncol = 2)
+      
 
 ```
+
+
 
 
 
