@@ -1,0 +1,127 @@
+---
+title: ""
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# note to self; load 'plyr' before 'dplyr' / 'tidyverse'; see page 151 ' R for Everyone'
+
+library(plyr)
+library(tidyverse)
+# note: tidyverse includes 'dplyr' package but not 'plyr'
+
+library(printr)
+library(reshape2)
+library(pander)
+
+library(lubridate)
+library(scales)
+library(rio)
+library(knitr)
+library(tinytex)
+library(ggnewscale)
+library(hydroTSM)
+library(cowplot)
+library(flextable)
+library(officer) #see page 30 'flextable' package
+library(weathercan)
+library(lutz) # required to download wx stations in weathercan
+library(sf) # required to download wx stations in weathercan
+library(naniar)
+library(rmarkdown)
+library(RcppRoll)
+library(GGally)
+
+
+```
+
+
+##  Correlation Analysis in R
+- correlation is a measure of the strength of a linear relationship between two quantitative variables
+- Some R packages that are available for correlation analysis:
+  - corrplot, correlation, hydroTSM, and GGally
+- demo the GGally package with evapotranspiration data
+ 
+  
+
+
+```{r read-ET-data, eval = TRUE, include=TRUE, cache=TRUE}
+
+    # clean out all the old files
+
+    rm(list=ls())
+
+    
+    # read the climate and ref ET data (total 5 files)
+
+    # get list of file names and paths
+
+    files_ET <- dir('ACIS_Ref_ET_YYC',full.names=TRUE)
+    
+
+    # function to read and process the data for one site
+
+    read_ET_function <- function(x) {
+      
+      # read the CSV file
+      
+      YYC_ET_daily<-read.table(x,sep=",",header=TRUE,stringsAsFactors = FALSE)
+      
+      
+    } # end read_ET_function
+
+
+      # use map to apply the 'read_ET_function'
+    
+      YYC_ET_daily_list <- files_ET %>% map(read_ET_function)
+    
+      # use 'bind_rows' to combine the list of ET dataframes to one dataframe
+  
+      YYC_ET_daily <- bind_rows(YYC_ET_daily_list)
+      
+      view(YYC_ET_daily)
+      
+      # create directory name for the annual max results
+      ET_folder_1<-'data_out/demo_4a'
+     
+      # create (if necessary) 'data_out/demo_4a' directory
+      if(dir.exists(ET_folder_1) == FALSE) dir.create(ET_folder_1)
+      
+      # create .CSV outfile name
+      ET_file_name<-paste0("YYC_ref_ET.csv")
+      annual_max_outfile<-file.path(ET_folder_1, ET_file_name)
+       
+      # write the above results to .CSV files
+      # write.table(YYC_ET_daily,annual_max_outfile,sep=",",col.names=TRUE,row.names=FALSE)
+      
+      
+      
+      
+    # select columns of interest ** not used here **
+    
+    # columns_to_keep <- names(hourly_data_3[c(1,2,13,14,15,16,20)])
+    # 
+    # hourly_data_3s <- hourly_data_3 %>% select(all_of(columns_to_keep))
+    
+    
+```
+
+
+##  Frequency Analysis - Method Moments
+
+
+
+![Gumbel pdf](images/Gumbel_7.2.1.png)
+
+
+
+
+
+
+
+
+
+
+
